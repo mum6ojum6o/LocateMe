@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+       #map {
+        height: 400px;
+        width: 100%;
+       }
+    </style>
+  </head>
+  <script src="https://www.gstatic.com/firebasejs/4.9.0/firebase.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/4.9.0/firebase-database.js"></script>
+  <script>
+  var config = {
+    apiKey: "AIzaSyBAV4toprEtRL_VWJlm3RZxB06aTGVE9wM",
+    authDomain: "locateme-885b5.firebaseio.com/",
+    databaseURL: "https://locateme-885b5.firebaseio.com/"
+   
+  };
+  firebase.initializeApp(config);
+  </script>
+  <body>
+    <h3>My Google Maps Demo</h3>
+    <div id="map"></div>
+    <script>
+	var map; 
+	var lat,long;
+      function initMap() {
+	  var database =firebase.database();
+	  var latt;
+	  var db = firebase.database().ref('/LocationsHistory/Test/');
+	  db.on('value',gotOne,errData);
+	
+	    var uluru = {lat: 0.0, lng: 0.0};
+        var map = new google.maps.Map(document.getElementById('map'), {
+          zoom: 18,
+          center: uluru
+        });
+        var marker = new google.maps.Marker({
+          position: uluru,
+          map: map
+        });
+      }
+	 
+	  
+	  
+	  
+	  function gotOne(data){
+	  var location=data.val();
+	  console.log(data.val().latitude+' ');
+	  lat = location.latitude;
+	  long = location.longitude;
+	  var uluru = {lat: lat, lng: long};
+	  var map = new google.maps.Map(document.getElementById('map'), {
+          zoom: 18,
+          center: uluru
+        });
+	  var marker = new google.maps.Marker({
+          position: uluru,
+          map: map
+        });
+	  }
+	 function errData(err){
+	 console.log('Error!');
+	 console.log(err);
+	 }
+    </script>
+    <script async defer
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDKrspoqCsZBo3zApnB5wN4bCJMV-FJRyI&callback=initMap">
+    </script>
+  </body>
+</html>
