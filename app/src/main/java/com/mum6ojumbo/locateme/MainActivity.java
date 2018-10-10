@@ -21,6 +21,11 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import com.esri.arcgisruntime.mapping.ArcGISMap;
+import com.esri.arcgisruntime.mapping.Basemap;
+import com.esri.arcgisruntime.mapping.view.MapView;
+import com.esri.arcgisruntime.mapping.view.SceneView;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.ResolvableApiException;
@@ -55,7 +60,7 @@ public class MainActivity extends AppCompatActivity
     public static final String TAG="LocateMe";
     public DrawerLayout mDrawerLayout;
     GoogleMap mGoogleMap;
-    private SupportMapFragment mapFragment;
+    //private SupportMapFragment mapFragment;
     private DatabaseReference mDatabase;
     private GoogleApiClient mGoogleApiClient;
     private FloatingActionButton mMyLocation,mTransmitLocation;
@@ -70,6 +75,7 @@ public class MainActivity extends AppCompatActivity
     private Boolean mRequestingLocationUpdates=false;
     private TextView textViewLon,textViewLat;
     private FirebaseUser firebaseUser;
+    private MapView mMapView;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -109,19 +115,14 @@ public class MainActivity extends AppCompatActivity
         actionbar.setDisplayHomeAsUpEnabled(true);
         actionbar.setHomeAsUpIndicator(R.drawable.ic_menu_black);
         toolbar.setVisibility(View.VISIBLE);
-       /* mFetchLocBtn = (Button)findViewById(R.id.SignOutBtn);
-        mStartTransmittingBtn = (Button)findViewById(R.id.TransmittingLocBtn);
-        mStoptransmitting= (Button)findViewById(R.id.StopLocBtn);*/
+
        mMyLocation = (FloatingActionButton)findViewById(R.id.fab_my_location);
        mTransmitLocation = (FloatingActionButton)findViewById(R.id.fab_transmission);
        mMyLocation.setOnClickListener(this);
        mTransmitLocation.setOnClickListener(this);
-        mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
-       /* mStartTransmittingBtn.setOnClickListener(this);
-        mStoptransmitting.setOnClickListener(this);*/
-        mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
-       /* mFetchLocBtn.setOnClickListener(this);*/
-        mapFragment.getMapAsync(this);
+       //mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
+       mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+       //mapFragment.getMapAsync(this);
         if(mGoogleApiClient == null){
             mGoogleApiClient = new GoogleApiClient.Builder(this)
                     .enableAutoManage(this,this)
@@ -138,14 +139,16 @@ public class MainActivity extends AppCompatActivity
                         Log.i("MainAct", "from Location Callback");
                         mCurrentLocation = aLocation;
                         //updateUI();
-                        updateMarker();
-                        goOnline();
+                        //updateMarker();
+                        //goOnline();
+                        setupMap();
                     }
                 }
 
                 ;
             };
-
+            mMapView = findViewById(R.id.mapView);
+            setupMap();
 
     }
     @Override
@@ -244,7 +247,8 @@ public class MainActivity extends AppCompatActivity
                             // Got last known location. In some rare situations this can be null.
                             if (location != null) {
                                 mCurrentLocation=location;
-                                pointMapMarker(mCurrentLocation);
+                                //pointMapMarker(mCurrentLocation);
+                                setupMap();
                             }
                         }
                     });
@@ -341,7 +345,7 @@ public class MainActivity extends AppCompatActivity
     public void onMapReady(GoogleMap googleMap) {
         Log.i(TAG,"MapReady");
         mGoogleMap=googleMap;
-        updateMarker();
+        //updateMarker();
     }
     public void updateMarker(){
         LatLng position=null;
@@ -350,7 +354,8 @@ public class MainActivity extends AppCompatActivity
         if(ContextCompat.checkSelfPermission(this,"android.permission.ACCESS_FINE_LOCATION")==PackageManager.PERMISSION_GRANTED) {
             if (mCurrentLocation != null) {
                 Log.i(TAG,"currentLocation retreived");
-               pointMapMarker(mCurrentLocation);
+               //pointMapMarker(mCurrentLocation);
+                setupMap();
             } else {
                 Log.i(TAG,"fetching Last Location");
                 getLastLocation();
@@ -391,6 +396,24 @@ public class MainActivity extends AppCompatActivity
         dialogFragment.show(getSupportFragmentManager(),"additional details");
 
     }
+    private void setupMap() {
+        Basemap.Type basemapType = Basemap.Type.STREETS_VECTOR;
+        double latitude = 34.05293;
+        double longitude = -118.24368;
+        int levelOfDetail = 11;
+        if(mCurrentLocation!=null){
+            latitude = mCurrentLocation.getLatitude();
+            longitude = mCurrentLocation.getLongitude();
+        }
+        if (mMapView != null) {
+            ArcGISMap map = new ArcGISMap(basemapType, latitude, longitude, levelOfDetail);
+            mMapView.setMap(map);
+        }else{
+            Toast.makeText(this,"Unable to initialize MapView",Toast.LENGTH_SHORT).show();
+        }
+
+    }
+
 }
 
 class FireBaseDatabaseRec{
