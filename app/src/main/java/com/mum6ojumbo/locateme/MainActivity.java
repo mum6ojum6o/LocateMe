@@ -1,10 +1,15 @@
 package com.mum6ojumbo.locateme;
 
+import android.Manifest;
+import android.arch.lifecycle.Observer;
+import android.arch.lifecycle.ViewModelProvider;
+import android.arch.lifecycle.ViewModelProviders;
 import android.content.Intent;
 import android.content.IntentSender;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.NavigationView;
 import android.support.v4.app.ActivityCompat;
@@ -24,6 +29,7 @@ import android.widget.Toast;
 
 import com.esri.arcgisruntime.mapping.ArcGISMap;
 import com.esri.arcgisruntime.mapping.Basemap;
+import com.esri.arcgisruntime.mapping.view.LocationDisplay;
 import com.esri.arcgisruntime.mapping.view.MapView;
 import com.esri.arcgisruntime.mapping.view.SceneView;
 import com.google.android.gms.common.ConnectionResult;
@@ -50,32 +56,32 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.mum6ojumbo.locateme.room.repositories.LocationTrackingRepository;
+import com.mum6ojumbo.locateme.viewModels.LocationTrackerViewModel;
+import com.mum6ojumbo.locateme.viewModels.LocationViewModelFactory;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
-public class MainActivity extends AppCompatActivity
-        implements View.OnClickListener,OnSuccessListener,OnFailureListener,
-        GoogleApiClient.OnConnectionFailedListener,OnMapReadyCallback{
+public class MainActivity extends AppCompatActivity implements View.OnClickListener{
     public static final String TAG="LocateMe";
     public DrawerLayout mDrawerLayout;
     GoogleMap mGoogleMap;
     //private SupportMapFragment mapFragment;
     private DatabaseReference mDatabase;
-    private GoogleApiClient mGoogleApiClient;
+
     private FloatingActionButton mMyLocation,mTransmitLocation;
     //private Button mFetchLocBtn,mStartTransmittingBtn,mStoptransmitting;
-    private FusedLocationProviderClient mFusedLocationClient;
+
     private final int LOC_REQ_CODE=345;
-    private LocationRequest mLocationRequest;
-    private LocationSettingsRequest.Builder mLocBuilder;
     private int REQUEST_CHECK_SETTINGS = 543;
-    private LocationCallback mLocationCallback;
-    private Location mCurrentLocation;
     private Boolean mRequestingLocationUpdates=false;
     private TextView textViewLon,textViewLat;
     private FirebaseUser firebaseUser;
     private MapView mMapView;
+    private LocationDisplay mLocationDisplay;
+    private LocationTrackerViewModel mLocationTrackerViewModel;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -116,66 +122,31 @@ public class MainActivity extends AppCompatActivity
         actionbar.setHomeAsUpIndicator(R.drawable.ic_menu_black);
         toolbar.setVisibility(View.VISIBLE);
 
+
        mMyLocation = (FloatingActionButton)findViewById(R.id.fab_my_location);
        mTransmitLocation = (FloatingActionButton)findViewById(R.id.fab_transmission);
        mMyLocation.setOnClickListener(this);
        mTransmitLocation.setOnClickListener(this);
        //mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
-       mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
-       //mapFragment.getMapAsync(this);
-        if(mGoogleApiClient == null){
-            mGoogleApiClient = new GoogleApiClient.Builder(this)
-                    .enableAutoManage(this,this)
-                    .addApi(LocationServices.API)
-                    .addOnConnectionFailedListener(this)
-                    .build();
-        }
+
         //if (ContextCompat.checkSelfPermission(this, "android.permission.ACCESS_FINE_LOCATION") ==PackageManager.PERMISSION_GRANTED) {
-            mLocationCallback = new LocationCallback() {
-                @Override
-                public void onLocationResult(LocationResult locationResult) {
-                    for (Location aLocation : locationResult.getLocations()) {
-                        //update UI
-                        Log.i("MainAct", "from Location Callback");
-                        mCurrentLocation = aLocation;
-                        //updateUI();
-                        //updateMarker();
-                        //goOnline();
-                        setupMap();
-                    }
-                }
 
-                ;
-            };
-            mMapView = findViewById(R.id.mapView);
-            setupMap();
-
+       mMapView = findViewById(R.id.mapView);
+       setupMap();
+       setupLocationDisplay();
+       mLocationTrackerViewModel = ViewModelProviders.of(this,new LocationViewModelFactory(this.getApplication(),mLocationDisplay,this)).get(LocationTrackerViewModel.class);
     }
     @Override
     protected void onResume(){
         super.onResume();
         Log.i("MainAct","In onResume");
-        if(!mGoogleApiClient.isConnected()){
+        /*if(!mGoogleApiClient.isConnected()){
             //mGoogleApiClient.connect();
-        }
+        }*/
         if(ContextCompat.checkSelfPermission(this,"android.permission.ACCESS_FINE_LOCATION")==PackageManager.PERMISSION_GRANTED) {
 
-            createLocationRequest();
-            mLocBuilder = new LocationSettingsRequest.Builder().addLocationRequest(mLocationRequest);
-            SettingsClient client = LocationServices.getSettingsClient(this);
-            Task<LocationSettingsResponse> task = client.checkLocationSettings(mLocBuilder.build());
-            task.addOnSuccessListener(this);
-            task.addOnFailureListener(this);
-            Log.i("MainAct","LocationUpdates Status:"+mRequestingLocationUpdates);
-            if(mRequestingLocationUpdates)
-                startLocationUpdates();
-        }
-/*
-        else{
-            ActivityCompat.requestPermissions(MainActivity.this,new String[]{"android.permission.ACCESS_FINE_LOCATION"},LOC_REQ_CODE);
-        }
-*/
 
+        }
     }
 
     @Override
@@ -203,23 +174,23 @@ public class MainActivity extends AppCompatActivity
 
     private void takeAppropriateAction(){
         if(mRequestingLocationUpdates){
-            stopLocationUpdates();
+            //stopLocationUpdates();
             Toast.makeText(this,"Stopping Location Updates",Toast.LENGTH_SHORT).show();
             mTransmitLocation.setBackgroundTintList(getResources().getColorStateList(R.color.green));
         }
         else{
-            startLocationUpdates();
+            //startLocationUpdates();
             Toast.makeText(this,"Starting Location Updates",Toast.LENGTH_SHORT).show();
             //mTransmitLocation.setBackgroundColor(getResources().getColor(R.color.red));
             mTransmitLocation.setBackgroundTintList(getResources().getColorStateList(R.color.red));
         }
     }
     public void signOutUser(){
-        stopLocationUpdates();
+        //stopLocationUpdates();
         FirebaseAuth.getInstance()
                 .signOut();
         AuthenticationActivity.getGoogleSignInClient().signOut();
-        mGoogleApiClient.disconnect();
+        //mGoogleApiClient.disconnect();
         startActivity(new Intent(MainActivity.this,AuthenticationActivity.class));
         finish();
     }
@@ -227,8 +198,10 @@ public class MainActivity extends AppCompatActivity
         switch(requestCode){
             case LOC_REQ_CODE:
                 if(permissions.length>0 && result[0]==PackageManager.PERMISSION_GRANTED){
-                    getLastLocation();
-                    stopLocationUpdates();
+                    //getLastLocation();
+                    Log.i(TAG,"permission granted!");
+                    //mLocationDisplay.startAsync();
+                    //stopLocationUpdates();
                 }
                 else{
                     Log.i("MainAct","Location Services denied!!");
@@ -238,83 +211,9 @@ public class MainActivity extends AppCompatActivity
         }
     }
     public void getLastLocation(){
-        Log.i(TAG,"gettingLastLocation");
-        try {
-            mFusedLocationClient.getLastLocation()
-                    .addOnSuccessListener(this, new OnSuccessListener<Location>() {
-                        @Override
-                        public void onSuccess(Location location) {
-                            // Got last known location. In some rare situations this can be null.
-                            if (location != null) {
-                                mCurrentLocation=location;
-                                //pointMapMarker(mCurrentLocation);
-                                setupMap();
-                            }
-                        }
-                    });
-        }catch (SecurityException e ){e.printStackTrace();}
-    }
-    protected void createLocationRequest(){
-        Log.i("MainAct","Creating Location Request");
-        if(ContextCompat.checkSelfPermission(MainActivity.this,"android.permission.ACCESS_FINE_LOCATION")==PackageManager.PERMISSION_GRANTED) {
-            mLocationRequest = new LocationRequest();
-            mLocationRequest.setInterval(10000);
-            mLocationRequest.setFastestInterval(5000);
-            mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
-        }
-        else
-            ActivityCompat.requestPermissions(MainActivity.this,new String[]{"android.permission.ACCESS_FINE_LOCATION"},LOC_REQ_CODE);
-    }
-
-    private void startLocationUpdates(){
-        if(ContextCompat.checkSelfPermission(MainActivity.this,"android.permission.ACCESS_FINE_LOCATION")==PackageManager.PERMISSION_GRANTED) {
-            Log.i("MainAct","Location Updates Started!");
-            mFusedLocationClient.requestLocationUpdates(mLocationRequest, mLocationCallback, null);
-            mRequestingLocationUpdates=true;
-        }
-        else
-            ActivityCompat.requestPermissions(MainActivity.this,new String[]{"android.permission.ACCESS_FINE_LOCATION"},LOC_REQ_CODE);
-    }
-    private void stopLocationUpdates(){
-        Log.i("MainAct","Stopping Location Services");
-        mFusedLocationClient.removeLocationUpdates(mLocationCallback);
-        mRequestingLocationUpdates=false;
-    }
-    @Override
-    public void onSuccess(Object o) {
-        Log.i("MainAct","Sucess");
-        if(ContextCompat.checkSelfPermission(MainActivity.this,"android.permission.ACCESS_FINE_LOCATION")==PackageManager.PERMISSION_GRANTED) {
-            if (o instanceof LocationSettingsResponse) {
-                LocationSettingsResponse locSettResponse = (LocationSettingsResponse) o;
-                Toast.makeText(this, "Location Services enabled!!", Toast.LENGTH_SHORT).show();
-            }
-        }else{
-            ActivityCompat.requestPermissions(this,new String[]{"android.permission.ACCESS_FINE_LOCATION"},LOC_REQ_CODE);
-        }
 
     }
 
-    @Override
-    public void onFailure(@NonNull Exception e) {
-        if (e instanceof ResolvableApiException) {
-            // Location settings are not satisfied, but this can be fixed
-            // by showing the user a dialog.
-            try {
-                // Show the dialog by calling startResolutionForResult(),
-                // and check the result in onActivityResult().
-                ResolvableApiException resolvable = (ResolvableApiException) e;
-                resolvable.startResolutionForResult(MainActivity.this,
-                        REQUEST_CHECK_SETTINGS);
-            } catch (IntentSender.SendIntentException sendEx) {
-                // Ignore the error.
-            }
-        }
-    }
-
-    @Override
-    public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
-        Toast.makeText(getApplicationContext(),"Connection with Play Services Failed!",Toast.LENGTH_SHORT).show();
-    }
     @Override
     protected void onSaveInstanceState(Bundle outState){
         outState.putBoolean("LOCATION_UPDATES_STATUS",mRequestingLocationUpdates);
@@ -324,47 +223,15 @@ public class MainActivity extends AppCompatActivity
         if(savedInstanceState.containsKey("LOCATION_UPDATES_STATUS"))
             mRequestingLocationUpdates = savedInstanceState.getBoolean("LOCATION_UPDATES_STATUS");
     }
-    private void updateUI(){
-        if(mCurrentLocation!=null) {
-            textViewLon.setText("Longitude:" + mCurrentLocation.getLongitude());
-            textViewLat.setText("Longitude:"+mCurrentLocation.getLatitude());
-        }
 
-    }
-    public void goOnline(){
-        mDatabase = FirebaseDatabase.getInstance().getReference();
-        Date aDate = new Date();
-        SimpleDateFormat formatter = new SimpleDateFormat("E yyyy.MM.dd 'at' hh:mm:ss a zzz");
-        FireBaseDatabaseRec aRec=new  FireBaseDatabaseRec(FirebaseAuth.getInstance().getCurrentUser().getEmail(),
-                mCurrentLocation.getLongitude(),mCurrentLocation.getLatitude(),formatter.format(aDate));
-        Log.i(TAG,mCurrentLocation.getLongitude()+" "+mCurrentLocation.getLatitude());
-        mDatabase.child("LocationsHistory").child(FirebaseAuth.getInstance().getUid()).setValue(aRec);
-    }
 
-    @Override
+    /*@Override
     public void onMapReady(GoogleMap googleMap) {
         Log.i(TAG,"MapReady");
         mGoogleMap=googleMap;
         //updateMarker();
-    }
-    public void updateMarker(){
-        LatLng position=null;
-        mGoogleMap.clear();
-        Log.i("MainAct","update Marker");
-        if(ContextCompat.checkSelfPermission(this,"android.permission.ACCESS_FINE_LOCATION")==PackageManager.PERMISSION_GRANTED) {
-            if (mCurrentLocation != null) {
-                Log.i(TAG,"currentLocation retreived");
-               //pointMapMarker(mCurrentLocation);
-                setupMap();
-            } else {
-                Log.i(TAG,"fetching Last Location");
-                getLastLocation();
+    }*/
 
-            }
-        }else{
-            ActivityCompat.requestPermissions(this,new String[]{"android.permission.ACCESS_FINE_LOCATION"},LOC_REQ_CODE);
-        }
-    }
 
     public void pointMapMarker(Location aLocation){
         LatLng position=null;
@@ -397,24 +264,61 @@ public class MainActivity extends AppCompatActivity
 
     }
     private void setupMap() {
+        mLocationDisplay=mMapView.getLocationDisplay();
         Basemap.Type basemapType = Basemap.Type.STREETS_VECTOR;
         double latitude = 34.05293;
         double longitude = -118.24368;
         int levelOfDetail = 11;
-        if(mCurrentLocation!=null){
+       /* if(mCurrentLocation!=null){
             latitude = mCurrentLocation.getLatitude();
             longitude = mCurrentLocation.getLongitude();
-        }
+        }*/
+
         if (mMapView != null) {
             ArcGISMap map = new ArcGISMap(basemapType, latitude, longitude, levelOfDetail);
             mMapView.setMap(map);
+            //mLocationDisplay.setAutoPanMode(LocationDisplay.AutoPanMode.COMPASS_NAVIGATION);
+            //mLocationDisplay.startAsync();
         }else{
             Toast.makeText(this,"Unable to initialize MapView",Toast.LENGTH_SHORT).show();
         }
 
     }
+    public void setupLocationDisplay(){
+        mLocationDisplay=mMapView.getLocationDisplay();
+        mLocationDisplay.addDataSourceStatusChangedListener(new LocationDisplay.DataSourceStatusChangedListener() {
+            @Override
+            public void onStatusChanged(LocationDisplay.DataSourceStatusChangedEvent dataSourceStatusChangedEvent) {
+
+                // If LocationDisplay started OK or no error is reported, then continue.
+                if (dataSourceStatusChangedEvent.isStarted() || dataSourceStatusChangedEvent.getError() == null) {
+                    return;
+                }
+
+                int requestPermissionsCode = 2;
+                String[] requestPermissions = new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION};
+
+                // If an error is found, handle the failure to start.
+                // Check permissions to see if failure may be due to lack of permissions.
+                if (!(ContextCompat.checkSelfPermission(MainActivity.this, requestPermissions[0]) == PackageManager.PERMISSION_GRANTED
+                        && ContextCompat.checkSelfPermission(MainActivity.this, requestPermissions[1]) == PackageManager.PERMISSION_GRANTED)) {
+                    // If permissions are not already granted, request permission from the user.
+                    ActivityCompat.requestPermissions(MainActivity.this, requestPermissions, requestPermissionsCode);
+                } else {
+                    // Report other unknown failure types to the user - for example, location services may not
+                    // be enabled on the device.
+                    String message = String.format("Error in DataSourceStatusChangedListener: %s", dataSourceStatusChangedEvent
+                            .getSource().getLocationDataSource().getError().getMessage());
+                    Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
+                }
+            }
+        });
+        //mLocationDisplay.setAutoPanMode(LocationDisplay.AutoPanMode.COMPASS_NAVIGATION);
+        //mLocationDisplay.startAsync();
+    }
 
 }
+
 
 class FireBaseDatabaseRec{
     public String name;

@@ -3,8 +3,8 @@
 
     <!-- TODO: Remove or change this placeholder text -->
     <string name="hello_blank_fragment">Hello blank fragment</string>
-
     <string name="label_share_real_time_loc">Share your real time location</string>
     <string name="label_until">Until 12:35pm</string>
     <string name="label_share_with">Share With</string>
+    <string name="label_sync">Start Syncing</string>
 </resources>
