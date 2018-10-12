@@ -7,6 +7,7 @@ import android.arch.lifecycle.ViewModelProviders;
 import android.content.Intent;
 import android.content.IntentSender;
 import android.content.pm.PackageManager;
+import android.content.res.ColorStateList;
 import android.location.Location;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -27,6 +28,7 @@ import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.esri.arcgisruntime.location.AndroidLocationDataSource;
 import com.esri.arcgisruntime.mapping.ArcGISMap;
 import com.esri.arcgisruntime.mapping.Basemap;
 import com.esri.arcgisruntime.mapping.view.LocationDisplay;
@@ -57,25 +59,28 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.mum6ojumbo.locateme.room.repositories.LocationTrackingRepository;
+import com.mum6ojumbo.locateme.services.SyncService;
 import com.mum6ojumbo.locateme.viewModels.LocationTrackerViewModel;
 import com.mum6ojumbo.locateme.viewModels.LocationViewModelFactory;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
-public class MainActivity extends AppCompatActivity implements View.OnClickListener{
+public class MainActivity extends AppCompatActivity implements View.OnClickListener,AdditionalDetailsDialog.UpdateContainer{
     public static final String TAG="LocateMe";
+    public static int shareId=11;
     public DrawerLayout mDrawerLayout;
     GoogleMap mGoogleMap;
     //private SupportMapFragment mapFragment;
     private DatabaseReference mDatabase;
-
+    private static int share_id = 1;
     private FloatingActionButton mMyLocation,mTransmitLocation;
     //private Button mFetchLocBtn,mStartTransmittingBtn,mStoptransmitting;
-
+    private Intent mServiceStartingIntent;
     private final int LOC_REQ_CODE=345;
     private int REQUEST_CHECK_SETTINGS = 543;
     private Boolean mRequestingLocationUpdates=false;
+    private Boolean mSharingLocation=false;
     private TextView textViewLon,textViewLat;
     private FirebaseUser firebaseUser;
     private MapView mMapView;
@@ -134,7 +139,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
        mMapView = findViewById(R.id.mapView);
        setupMap();
        setupLocationDisplay();
-       mLocationTrackerViewModel = ViewModelProviders.of(this,new LocationViewModelFactory(this.getApplication(),mLocationDisplay,this)).get(LocationTrackerViewModel.class);
+       mLocationTrackerViewModel = ViewModelProviders.of(this,
+               new LocationViewModelFactory(this.getApplication(),mLocationDisplay,null))
+               .get(LocationTrackerViewModel.class);
     }
     @Override
     protected void onResume(){
@@ -144,8 +151,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             //mGoogleApiClient.connect();
         }*/
         if(ContextCompat.checkSelfPermission(this,"android.permission.ACCESS_FINE_LOCATION")==PackageManager.PERMISSION_GRANTED) {
-
-
+            mLocationDisplay.setAutoPanMode(LocationDisplay.AutoPanMode.COMPASS_NAVIGATION);
+            mLocationDisplay.startAsync();
         }
     }
 
@@ -154,6 +161,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         super.onPause();
         //mGoogleApiClient.disconnect();
         //stopLocationUpdates();
+        mLocationDisplay.stop();
     }
     @Override
     protected void onStop(){
@@ -166,7 +174,14 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 getLastLocation();
                 break;
             case R.id.fab_transmission:
-                loadSyncDetailsFragment();
+                if(!mSharingLocation)
+                    loadSyncDetailsFragment();
+                else {
+                    updateMembers();
+                    stopService(mServiceStartingIntent);
+                }
+                //mLocationDisplay.stop();
+                //finish();
                 //takeAppropriateAction();
                 break;
         }
@@ -192,7 +207,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         AuthenticationActivity.getGoogleSignInClient().signOut();
         //mGoogleApiClient.disconnect();
         startActivity(new Intent(MainActivity.this,AuthenticationActivity.class));
-        finish();
+
     }
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] result ){
         switch(requestCode){
@@ -211,7 +226,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     }
     public void getLastLocation(){
-
+        mLocationDisplay.setAutoPanMode(LocationDisplay.AutoPanMode.COMPASS_NAVIGATION);
     }
 
     @Override
@@ -259,6 +274,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         Fragment syncDetailsFragment = new SyncDetailsFragment();
         fragmentTransaction.add(R.id.sync_details_fragment,syncDetailsFragment);
         fragmentTransaction.commit();*/
+        //bundle.putSerializable("LocationRepo:",mLocationDisplay);
         DialogFragment dialogFragment = new AdditionalDetailsDialog();
         dialogFragment.show(getSupportFragmentManager(),"additional details");
 
@@ -317,17 +333,34 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         //mLocationDisplay.startAsync();
     }
 
-}
 
+    public void updateButtons(boolean sharingLocation){
+        if(sharingLocation){
+            //mTransmitLocation.setEnabled(false);
+            //mTransmitLocation.setBackgroundColor(getResources().getColor(R.color.red));
+            mTransmitLocation.
+                    setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.red,null)));
+        }else{
+            Intent intent = new Intent(MainActivity.this, SyncService.class);
+            stopService(intent);
+            mTransmitLocation.setEnabled(true);
+        //    mTransmitLocation.setBackgroundColor(getResources().getColor(R.color.green));
+            mTransmitLocation.
+                    setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.green,null)));
+        }
+    }
 
-class FireBaseDatabaseRec{
-    public String name;
-    public double latitude,longitude;
-    public String timestamp;
-    FireBaseDatabaseRec(String name,double lon, double lat,String date){
-        this.name=name;
-        this.longitude=lon;
-        this.latitude=lat;
-        timestamp=date;
+    @Override
+    public void updateMembers() {
+        mSharingLocation=!mSharingLocation;
+        updateButtons(mSharingLocation);
+
+    }
+
+    @Override
+    public void storeServiceStartingIntent(Intent serviceStartingIntent) {
+        mServiceStartingIntent =serviceStartingIntent;
     }
 }
+
+

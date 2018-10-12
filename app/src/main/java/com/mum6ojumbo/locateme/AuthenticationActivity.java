@@ -21,6 +21,9 @@ import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.auth.GoogleAuthProvider;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.mum6ojumbo.locateme.model.UserDataModel;
 
 public class AuthenticationActivity extends AppCompatActivity implements View.OnClickListener{
     private static final int RC_SIGN_IN = 9072;
@@ -52,6 +55,11 @@ private FirebaseUser mCurrentUser;
             redirect();
     }
     private void redirect(){
+        DatabaseReference database = FirebaseDatabase.getInstance().getReference();
+        UserDataModel model = new UserDataModel(null,
+                FirebaseAuth.getInstance().getCurrentUser().getEmail(),
+                FirebaseAuth.getInstance().getUid());
+        database.child("Users/"+FirebaseAuth.getInstance().getUid()).setValue(model);
         startActivity(new Intent(AuthenticationActivity.this,MainActivity.class));
         finish();
     }

@@ -9,8 +9,6 @@ import android.util.Log;
 
 
 import com.esri.arcgisruntime.location.LocationDataSource;
-import com.esri.arcgisruntime.mapping.view.LocationDisplay;
-import com.mum6ojumbo.locateme.MainActivity;
 import com.mum6ojumbo.locateme.room.repositories.LocationTrackingRepository;
 
 public class LocationTrackerViewModel extends AndroidViewModel {
