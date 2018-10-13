@@ -1,6 +1,7 @@
 package com.mum6ojumbo.locateme;
 
 import android.Manifest;
+import android.arch.lifecycle.LiveData;
 import android.arch.lifecycle.Observer;
 import android.arch.lifecycle.ViewModelProvider;
 import android.arch.lifecycle.ViewModelProviders;
@@ -56,15 +57,24 @@ import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.database.ChildEventListener;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.Query;
+import com.google.firebase.database.ValueEventListener;
+import com.mum6ojumbo.locateme.model.LocationSharedByUsersEntity;
 import com.mum6ojumbo.locateme.room.repositories.LocationTrackingRepository;
+import com.mum6ojumbo.locateme.services.LocationReceiverService;
 import com.mum6ojumbo.locateme.services.SyncService;
 import com.mum6ojumbo.locateme.viewModels.LocationTrackerViewModel;
 import com.mum6ojumbo.locateme.viewModels.LocationViewModelFactory;
+import com.mum6ojumbo.locateme.viewModels.SharedLocationViewModel;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener,AdditionalDetailsDialog.UpdateContainer{
     public static final String TAG="LocateMe";
@@ -72,7 +82,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     public DrawerLayout mDrawerLayout;
     GoogleMap mGoogleMap;
     //private SupportMapFragment mapFragment;
-    private DatabaseReference mDatabase;
+    private DatabaseReference mDatabase ;
     private static int share_id = 1;
     private FloatingActionButton mMyLocation,mTransmitLocation;
     //private Button mFetchLocBtn,mStartTransmittingBtn,mStoptransmitting;
@@ -86,13 +96,15 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private MapView mMapView;
     private LocationDisplay mLocationDisplay;
     private LocationTrackerViewModel mLocationTrackerViewModel;
-
+    private SharedLocationViewModel mSharedLocationVM;
+    private LiveData<List<LocationSharedByUsersEntity>> mLocationShared;
+    Query q;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         if(savedInstanceState !=null)
             updateSavedState(savedInstanceState);
-
+        mDatabase=FirebaseDatabase.getInstance().getReference("LocationsHistory");
         setContentView(R.layout.activity_main_drawer_included);
         mDrawerLayout = findViewById(R.id.drawer_layout);
         NavigationView navigationView = findViewById(R.id.navigation_view);
@@ -118,7 +130,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                     }
                 }
         );
-
+        //mDatabase=FirebaseDatabase.getInstance().getReference();
         Toolbar toolbar = findViewById(R.id.toolbar);
         //toolbar.bringToFront();
         setSupportActionBar(toolbar);
@@ -127,7 +139,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         actionbar.setHomeAsUpIndicator(R.drawable.ic_menu_black);
         toolbar.setVisibility(View.VISIBLE);
 
-
+        //setupFirebaseNodeListener();
        mMyLocation = (FloatingActionButton)findViewById(R.id.fab_my_location);
        mTransmitLocation = (FloatingActionButton)findViewById(R.id.fab_transmission);
        mMyLocation.setOnClickListener(this);
@@ -135,13 +147,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
        //mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
 
         //if (ContextCompat.checkSelfPermission(this, "android.permission.ACCESS_FINE_LOCATION") ==PackageManager.PERMISSION_GRANTED) {
-
+        mSharedLocationVM = ViewModelProviders.of(this).get(SharedLocationViewModel.class);
        mMapView = findViewById(R.id.mapView);
        setupMap();
        setupLocationDisplay();
-       mLocationTrackerViewModel = ViewModelProviders.of(this,
-               new LocationViewModelFactory(this.getApplication(),mLocationDisplay,null))
-               .get(LocationTrackerViewModel.class);
+
+       startLocationListeningService();
+
     }
     @Override
     protected void onResume(){
@@ -151,11 +163,28 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             //mGoogleApiClient.connect();
         }*/
         if(ContextCompat.checkSelfPermission(this,"android.permission.ACCESS_FINE_LOCATION")==PackageManager.PERMISSION_GRANTED) {
+            mLocationTrackerViewModel = ViewModelProviders.of(this,
+                    new LocationViewModelFactory(this.getApplication(),mLocationDisplay,null))
+                    .get(LocationTrackerViewModel.class);
+            mLocationShared = mSharedLocationVM.getSharedLocations();
             mLocationDisplay.setAutoPanMode(LocationDisplay.AutoPanMode.COMPASS_NAVIGATION);
             mLocationDisplay.startAsync();
+            observeSharedLocations();
+        }else{
+            String[] requestPermissions = new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION};
+            ActivityCompat.requestPermissions(MainActivity.this, requestPermissions, LOC_REQ_CODE);
         }
     }
 
+    public void observeSharedLocations(){
+        mLocationShared.observe(this, new Observer<List<LocationSharedByUsersEntity>>() {
+            @Override
+            public void onChanged(@Nullable List<LocationSharedByUsersEntity> locationSharedByUsersEntities) {
+                Log.i(TAG,"receiving new Cordinates");
+                Log.i(TAG,"size:"+locationSharedByUsersEntities.size());
+            }
+        });
+    }
     @Override
     protected void onPause(){
         super.onPause();
@@ -215,7 +244,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 if(permissions.length>0 && result[0]==PackageManager.PERMISSION_GRANTED){
                     //getLastLocation();
                     Log.i(TAG,"permission granted!");
-                    //mLocationDisplay.startAsync();
+                    mLocationTrackerViewModel = ViewModelProviders.of(this,
+                            new LocationViewModelFactory(this.getApplication(),mLocationDisplay,null))
+                            .get(LocationTrackerViewModel.class);
+                    mLocationDisplay.startAsync();
                     //stopLocationUpdates();
                 }
                 else{
@@ -357,10 +389,71 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     }
 
+    public void startLocationListeningService(){
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                Intent intent = new Intent(MainActivity.this, LocationReceiverService.class);
+                startService(intent);
+            }
+        }).start();
+
+    }
+
     @Override
     public void storeServiceStartingIntent(Intent serviceStartingIntent) {
         mServiceStartingIntent =serviceStartingIntent;
     }
+
+    public void setupFirebaseNodeListener() {
+
+        Log.i(TAG, FirebaseAuth.getInstance().getUid() + "setupFIREBASELISTENER");
+        q = mDatabase.child(FirebaseAuth.getInstance().getUid());
+        /*q.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                Log.i(TAG, "getting Data");
+                for (DataSnapshot singleSnapshot : dataSnapshot.getChildren()) {
+                    LocationSharedByUsersEntity sharedByUsersEntity =
+                            singleSnapshot.getValue(LocationSharedByUsersEntity.class);
+                    //mFirebaseDatabaseRecRepo.insertRecord(sharedByUsersEntity);
+                    //listLocationHistory();
+                }
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+
+            }
+        });*/
+        q.addChildEventListener(new ChildEventListener() {
+            @Override
+            public void onChildAdded(DataSnapshot dataSnapshot, String s) {
+                Log.i(TAG,"Data Added");
+            }
+
+            @Override
+            public void onChildChanged(DataSnapshot dataSnapshot, String s) {
+                Log.i(TAG,"Data cahnged");
+            }
+
+            @Override
+            public void onChildRemoved(DataSnapshot dataSnapshot) {
+                Log.i(TAG,"Data removed");
+            }
+
+            @Override
+            public void onChildMoved(DataSnapshot dataSnapshot, String s) {
+
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+                Log.i(TAG,"Data Cancelled");
+            }
+        });
+    }
+
 }
 
 

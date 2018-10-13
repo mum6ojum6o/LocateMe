@@ -9,11 +9,16 @@ import android.util.Log;
 
 
 import com.esri.arcgisruntime.location.LocationDataSource;
+import com.mum6ojumbo.locateme.model.LocationSharedByUsersEntity;
+import com.mum6ojumbo.locateme.room.repositories.FirebaseDatabaseRecRepository;
 import com.mum6ojumbo.locateme.room.repositories.LocationTrackingRepository;
+
+import java.util.List;
 
 public class LocationTrackerViewModel extends AndroidViewModel {
     public static final String TAG="LocationTrackerVM";
     private LocationTrackingRepository mLocationTrackingRepository;
+
     private LiveData<LocationDataSource.Location> mLocationDataSource;
 
     public LocationTrackerViewModel(Application app,LocationTrackingRepository locationTrackingRepository){
@@ -22,7 +27,6 @@ public class LocationTrackerViewModel extends AndroidViewModel {
         mLocationTrackingRepository = locationTrackingRepository;
 
     }
-    LiveData<LocationDataSource.Location> getLocationDataSource(){
-        return mLocationDataSource;
-    }
+
+
 }

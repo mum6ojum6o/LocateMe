@@ -74,7 +74,7 @@ SeekBar.OnSeekBarChangeListener{
                 bundle.putSerializable("CurrentCustomerDetails", aRecord);
                 Intent intent = new Intent(getContext(), SyncService.class);
                 intent.putExtras(bundle);
-                AppExecutor.getInstance().getDiskIO().execute(new Runnable() {
+                AppExecutor.getInstance().getNetworkIO().execute(new Runnable() {
                     @Override
                     public void run() {
                         getContext().startService(intent);

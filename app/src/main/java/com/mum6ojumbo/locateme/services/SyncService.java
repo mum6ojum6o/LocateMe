@@ -33,12 +33,15 @@ public class SyncService extends Service implements LocationRepository.UpdateLoc
     private int startId;
     public SyncService() {
         super();
-        locationRepository = LocationRepository.getINSTANCE(this);
+
     }
     @Override
     public int onStartCommand(Intent intent,int flags,int startId){
+        Log.i(TAG,"starting loction listening service");
         Bundle b = intent.getExtras();
+        locationRepository = LocationRepository.getINSTANCE(this);
         locationRepository.init();
+
         mRecordToBeUploaded= (CurrentUserLocationSync)b.getSerializable("CurrentCustomerDetails");
         Log.i(TAG,"sharing with:"+mRecordToBeUploaded.getShareWith());
         this.startId=startId;

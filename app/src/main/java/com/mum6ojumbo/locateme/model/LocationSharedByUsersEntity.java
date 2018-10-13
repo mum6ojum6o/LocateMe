@@ -14,6 +14,9 @@ import java.util.List;
 @TypeConverters({DateConverter.class})
 public class LocationSharedByUsersEntity {
 //This class is used to share the logged in user's location coordinates to a selected user.
+    public LocationSharedByUsersEntity(){
+        //do nothing
+    }
     public LocationSharedByUsersEntity(@NonNull int shareId, @NonNull String username,
                                        @NonNull double longitude, @NonNull double latitude,
                                        @NonNull Date timestamp, @NonNull boolean outgoing){
@@ -24,6 +27,7 @@ public class LocationSharedByUsersEntity {
         this.timestamp=timestamp;
         this.outgoing = outgoing;
     }
+
     @PrimaryKey(autoGenerate = true)
     @NonNull
     public int id;
@@ -45,4 +49,12 @@ public class LocationSharedByUsersEntity {
     public double getLongitude(){return this.longitude;}
     public double getLatitude(){return this.latitude;}
     public String getUsername(){return this.username;}
+
+    public void setShareId(int shareId){this.shareId=shareId;}
+    public void setUsername(String username){this.username=username;}
+    public void setLatitude(double latitude){this.latitude=latitude;}
+    public void setLongitude(double longitude){this.longitude=longitude;}
+    //public void setTimestamp(Date timestamp){this.timestamp=timestamp;}
+    public void setTimestamp(long timestamp){ this.timestamp=new Date(timestamp);}
+    public void setName(String name){this.username=name;}
 }

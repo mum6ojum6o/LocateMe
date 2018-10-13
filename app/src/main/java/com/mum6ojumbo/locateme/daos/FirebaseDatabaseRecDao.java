@@ -19,4 +19,7 @@ public interface FirebaseDatabaseRecDao {
 
     @Query("SELECT * FROM location_shared_by_users_table WHERE username LIKE :name ORDER BY timestamp DESC")
     public LiveData<List<LocationSharedByUsersEntity>> getSpecificUserActivities(String name);
+
+    @Query("SELECT * FROM location_shared_by_users_table")
+    public LiveData<List<LocationSharedByUsersEntity>> getHistory();
 }
